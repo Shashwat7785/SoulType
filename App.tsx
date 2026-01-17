@@ -1,10 +1,8 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-// Corrected imports: User and MBTIType are now imported from ./types
+import React, { useState, useMemo } from 'react';
 import { MBTI_QUESTIONS, MOCK_USERS, PERSONALITY_MAP } from './constants';
 import { User, MBTIType } from './types';
-import { getDetailedPersonalityAnalysis, getCompatibilityTip } from './services/geminiService';
-import { Heart, User as UserIcon, BookOpen, Search, Sparkles, ChevronRight, CheckCircle2, LogOut } from 'lucide-react';
+import { Heart, BookOpen, Search, Sparkles, ChevronRight, CheckCircle2, LogOut } from 'lucide-react';
 
 // --- View Components ---
 
@@ -98,7 +96,6 @@ const QuizView: React.FC<{ onComplete: (type: MBTIType) => void }> = ({ onComple
     if (currentIndex < MBTI_QUESTIONS.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
-      // Final calculation logic
       const type = [
         answers.EI + score >= 0 ? 'E' : 'I',
         answers.SN + score >= 0 ? 'S' : 'N',
@@ -157,15 +154,6 @@ const QuizView: React.FC<{ onComplete: (type: MBTIType) => void }> = ({ onComple
 
 const ResultView: React.FC<{ type: MBTIType; onProceed: () => void }> = ({ type, onProceed }) => {
   const insight = PERSONALITY_MAP[type];
-  const [aiInsight, setAiInsight] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getDetailedPersonalityAnalysis(type, insight).then(res => {
-      setAiInsight(res);
-      setLoading(false);
-    });
-  }, [type, insight]);
 
   return (
     <div className="min-h-screen pt-32 pb-12 px-4 max-w-4xl mx-auto">
@@ -206,20 +194,21 @@ const ResultView: React.FC<{ type: MBTIType; onProceed: () => void }> = ({ type,
         </div>
       </div>
 
-      <div className="glass p-8 rounded-3xl border border-white/10 mb-12 min-h-[300px] flex flex-col">
+      <div className="glass p-8 rounded-3xl border border-white/10 mb-12 flex flex-col">
         <h4 className="text-xl font-bold mb-6 flex items-center gap-2">
-          <BookOpen className="text-purple-400" /> Gemini AI Deep Insight
+          <BookOpen className="text-purple-400" /> Personality Overview
         </h4>
-        {loading ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-500">
-            <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-            <p>Analyzing psychological nuances...</p>
-          </div>
-        ) : (
-          <div className="prose prose-invert max-w-none text-slate-300 leading-relaxed whitespace-pre-wrap">
-            {aiInsight}
-          </div>
-        )}
+        <div className="text-slate-300 leading-relaxed">
+          <p className="text-lg">
+            As a <strong>{type}</strong>, you bring a unique perspective to relationships. 
+            {insight.description} Your primary strengths, such as being {insight.strengths.join(', ')}, 
+            allow you to form deep and meaningful connections with those who appreciate your specific cognitive approach.
+          </p>
+          <p className="mt-4">
+            In the dating world, you often find the most harmony with {insight.idealMatches.join(' and ')} personalities 
+            who balance your traits and share your core values.
+          </p>
+        </div>
       </div>
 
       <button 
@@ -235,11 +224,7 @@ const ResultView: React.FC<{ type: MBTIType; onProceed: () => void }> = ({ type,
 const MatchingView: React.FC<{ user: User }> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'matches' | 'discover'>('matches');
   const [selectedMatch, setSelectedMatch] = useState<User | null>(null);
-  const [tip, setTip] = useState<string>("");
-  const [tipLoading, setTipLoading] = useState(false);
 
-  // Logic: "matches" are users with types in the idealMatches list.
-  // "discover" are everyone else.
   const idealMatchesList = PERSONALITY_MAP[user.personalityType!].idealMatches;
   
   const matches = useMemo(() => 
@@ -252,15 +237,6 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
     [idealMatchesList]
   );
 
-  const handleOpenProfile = (match: User) => {
-    setSelectedMatch(match);
-    setTipLoading(true);
-    getCompatibilityTip(user.personalityType!, match.personalityType!).then(res => {
-      setTip(res);
-      setTipLoading(false);
-    });
-  };
-
   const currentList = activeTab === 'matches' ? matches : discover;
 
   return (
@@ -268,7 +244,7 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
         <div>
           <h2 className="text-4xl font-bold mb-2">Find Your <span className="gradient-text">Connection</span></h2>
-          <p className="text-slate-400">Personalized suggestions based on {user.personalityType} psychology.</p>
+          <p className="text-slate-400">Suggestions based on your {user.personalityType} traits.</p>
         </div>
         
         <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 w-full md:w-auto">
@@ -292,7 +268,7 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
           <div 
             key={u.id}
             className="group relative glass rounded-3xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-indigo-500/50 transition-all transform hover:-translate-y-2"
-            onClick={() => handleOpenProfile(u)}
+            onClick={() => setSelectedMatch(u)}
           >
             <div className="aspect-square relative overflow-hidden">
               <img src={u.photoUrl} alt={u.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
@@ -345,18 +321,14 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
                     <p className="text-slate-200 leading-relaxed italic">"{selectedMatch.bio}"</p>
                   </div>
 
-                  <div className="p-4 bg-purple-500/5 rounded-2xl border border-purple-500/10">
-                    <h4 className="text-sm font-bold text-purple-400 flex items-center gap-2 mb-2">
-                      <Sparkles size={14} /> AI Matching Insight
+                  <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                    <h4 className="text-sm font-bold text-indigo-400 flex items-center gap-2 mb-2">
+                      <Sparkles size={14} /> Profile Match
                     </h4>
-                    {tipLoading ? (
-                      <div className="flex gap-2 items-center text-xs text-slate-500">
-                        <div className="w-3 h-3 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
-                        Generating chemistry analysis...
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-300 italic leading-relaxed whitespace-pre-wrap">{tip}</p>
-                    )}
+                    <p className="text-sm text-slate-300 italic leading-relaxed">
+                      As a {user.personalityType}, you often find {selectedMatch.personalityType}s to be 
+                      intriguing partners who bring a different but complementary energy to your life.
+                    </p>
                   </div>
 
                   <button className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2">
@@ -391,7 +363,7 @@ export default function App() {
       name,
       email,
       photoUrl: `https://picsum.photos/seed/${name}/400/400`,
-      location: 'Scanning...'
+      location: 'Discovery Mode'
     });
     setStage(AppStage.QUIZ);
   };
@@ -429,7 +401,7 @@ export default function App() {
 
       <footer className="py-12 border-t border-white/5 mt-20 text-center">
         <p className="text-slate-500 text-sm">
-          © {new Date().getFullYear()} SoulType. Powered by Gemini AI & Psychology.
+          © {new Date().getFullYear()} SoulType. Built with Psychology and Precision.
         </p>
       </footer>
     </div>
