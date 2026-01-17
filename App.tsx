@@ -1,14 +1,14 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MBTI_QUESTIONS, MOCK_USERS, PERSONALITY_MAP } from './constants';
 import { User, MBTIType } from './types';
-import { Heart, BookOpen, Search, Sparkles, ChevronRight, CheckCircle2, LogOut } from 'lucide-react';
+import { Heart, BookOpen, Search, Sparkles, ChevronRight, CheckCircle2, LogOut, Loader2 } from 'lucide-react';
+import { getDetailedPersonalityAnalysis, getCompatibilityTip } from './services/geminiService';
 
 // --- View Components ---
 
 const Header: React.FC<{ user?: User; onLogout: () => void }> = ({ user, onLogout }) => (
   <header className="fixed top-0 w-full z-50 glass border-b border-white/10 px-6 py-4 flex justify-between items-center">
-    <div className="flex items-center gap-2 cursor-pointer">
+    <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.reload()}>
       <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
         <Heart className="text-white fill-current" size={20} />
       </div>
@@ -49,7 +49,7 @@ const LoginView: React.FC<{ onLogin: (name: string, email: string) => void }> = 
             <label className="block text-sm font-medium text-slate-300 mb-1">Your Name</label>
             <input 
               type="text" 
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
               placeholder="e.g. Alex"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -59,7 +59,7 @@ const LoginView: React.FC<{ onLogin: (name: string, email: string) => void }> = 
             <label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
             <input 
               type="email" 
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
               placeholder="alex@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -68,7 +68,7 @@ const LoginView: React.FC<{ onLogin: (name: string, email: string) => void }> = 
           <button 
             onClick={() => name && email && onLogin(name, email)}
             disabled={!name || !email}
-            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-4 rounded-xl shadow-lg shadow-indigo-500/20 hover:opacity-90 transition-opacity active:scale-[0.98]"
+            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-4 rounded-xl shadow-lg shadow-indigo-500/20 hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50"
           >
             Find Your Type
           </button>
@@ -154,6 +154,15 @@ const QuizView: React.FC<{ onComplete: (type: MBTIType) => void }> = ({ onComple
 
 const ResultView: React.FC<{ type: MBTIType; onProceed: () => void }> = ({ type, onProceed }) => {
   const insight = PERSONALITY_MAP[type];
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getDetailedPersonalityAnalysis(type, insight).then(res => {
+      setAiAnalysis(res);
+      setLoading(false);
+    });
+  }, [type, insight]);
 
   return (
     <div className="min-h-screen pt-32 pb-12 px-4 max-w-4xl mx-auto">
@@ -194,21 +203,22 @@ const ResultView: React.FC<{ type: MBTIType; onProceed: () => void }> = ({ type,
         </div>
       </div>
 
-      <div className="glass p-8 rounded-3xl border border-white/10 mb-12 flex flex-col">
+      <div className="glass p-8 rounded-3xl border border-white/10 mb-12 min-h-[300px] relative">
         <h4 className="text-xl font-bold mb-6 flex items-center gap-2">
-          <BookOpen className="text-purple-400" /> Personality Overview
+          <BookOpen className="text-purple-400" /> AI-Generated Deep Dive
         </h4>
-        <div className="text-slate-300 leading-relaxed">
-          <p className="text-lg">
-            As a <strong>{type}</strong>, you bring a unique perspective to relationships. 
-            {insight.description} Your primary strengths, such as being {insight.strengths.join(', ')}, 
-            allow you to form deep and meaningful connections with those who appreciate your specific cognitive approach.
-          </p>
-          <p className="mt-4">
-            In the dating world, you often find the most harmony with {insight.idealMatches.join(' and ')} personalities 
-            who balance your traits and share your core values.
-          </p>
-        </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="animate-spin text-indigo-500" size={32} />
+            <p className="text-slate-400 italic">Gemini is analyzing your personality traits...</p>
+          </div>
+        ) : (
+          <div className="text-slate-300 leading-relaxed prose prose-invert max-w-none">
+            {aiAnalysis?.split('\n').map((line, i) => (
+              <p key={i} className="mb-4">{line}</p>
+            ))}
+          </div>
+        )}
       </div>
 
       <button 
@@ -224,6 +234,8 @@ const ResultView: React.FC<{ type: MBTIType; onProceed: () => void }> = ({ type,
 const MatchingView: React.FC<{ user: User }> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'matches' | 'discover'>('matches');
   const [selectedMatch, setSelectedMatch] = useState<User | null>(null);
+  const [compatibilityTip, setCompatibilityTip] = useState<string | null>(null);
+  const [loadingTip, setLoadingTip] = useState(false);
 
   const idealMatchesList = PERSONALITY_MAP[user.personalityType!].idealMatches;
   
@@ -238,6 +250,16 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
   );
 
   const currentList = activeTab === 'matches' ? matches : discover;
+
+  const handleMatchClick = (match: User) => {
+    setSelectedMatch(match);
+    setLoadingTip(true);
+    setCompatibilityTip(null);
+    getCompatibilityTip(user.personalityType!, match.personalityType!).then(res => {
+      setCompatibilityTip(res);
+      setLoadingTip(false);
+    });
+  };
 
   return (
     <div className="min-h-screen pt-32 pb-12 px-4 max-w-6xl mx-auto">
@@ -268,7 +290,7 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
           <div 
             key={u.id}
             className="group relative glass rounded-3xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-indigo-500/50 transition-all transform hover:-translate-y-2"
-            onClick={() => setSelectedMatch(u)}
+            onClick={() => handleMatchClick(u)}
           >
             <div className="aspect-square relative overflow-hidden">
               <img src={u.photoUrl} alt={u.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
@@ -323,12 +345,18 @@ const MatchingView: React.FC<{ user: User }> = ({ user }) => {
 
                   <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
                     <h4 className="text-sm font-bold text-indigo-400 flex items-center gap-2 mb-2">
-                      <Sparkles size={14} /> Profile Match
+                      <Sparkles size={14} /> AI Connection Tip
                     </h4>
-                    <p className="text-sm text-slate-300 italic leading-relaxed">
-                      As a {user.personalityType}, you often find {selectedMatch.personalityType}s to be 
-                      intriguing partners who bring a different but complementary energy to your life.
-                    </p>
+                    {loadingTip ? (
+                      <div className="flex items-center gap-2 py-2">
+                        <Loader2 className="animate-spin text-indigo-400" size={16} />
+                        <span className="text-xs text-slate-500 italic">Generating tip...</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-300 italic leading-relaxed">
+                        {compatibilityTip || `As a ${user.personalityType}, you often find ${selectedMatch.personalityType}s to be intriguing partners.`}
+                      </p>
+                    )}
                   </div>
 
                   <button className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2">
@@ -362,6 +390,7 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9),
       name,
       email,
+      age: 25, // Default for mock purposes
       photoUrl: `https://picsum.photos/seed/${name}/400/400`,
       location: 'Discovery Mode'
     });
